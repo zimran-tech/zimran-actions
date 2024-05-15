@@ -9,6 +9,14 @@ on:
         type: string
         description: 'Environment to deploy'
         required: true
+      helm_version:
+        type: string
+        description: 'Helm chart version'
+        required: true
+      image_name:
+        type: string
+        description: 'Name of the image to deploy'
+        required: true
 
 jobs:
   deploy:
@@ -26,10 +34,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Update kube config
         run: |
-            aws eks update-kubeconfig --name eks-infra --region us-east-1  --kubeconfig ./kubeconfig
-            echo 'KUBE_CONFIG_DATA<<EOF' >> $GITHUB_ENV
-            echo $(cat ./kubeconfig | base64) >> $GITHUB_ENV
-            echo 'EOF' >> $GITHUB_ENV
+          aws eks update-kubeconfig --name eks-infra --region us-east-1  --kubeconfig ./kubeconfig
+          echo 'KUBE_CONFIG_DATA<<EOF' >> $GITHUB_ENV
+          echo $(cat ./kubeconfig | base64) >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
       - name: helm deploy
         uses: koslib/helm-eks-action@master
         env:
@@ -40,6 +48,6 @@ jobs:
             helm repo update
 
             helm upgrade --install ${{ inputs.service_name }} prosperi-charts/app \
-               --version 2.0.0 -f helm-values-staging.yaml \
-               --set image=${{ steps.login-ecr.outputs.registry }}/${{ needs.build.outputs.IMAGE }} \
+               --version ${{ inputs.helm_version }} -f helm-values-staging.yaml \
+               --set image=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image_name }} \
                -n prosperi-services-${{ inputs.environment }} --debug

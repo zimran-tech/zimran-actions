@@ -5,6 +5,10 @@ on:
         description: 'Name of the service'
         type: string
         required: true
+    outputs:
+      image_name:
+        description: 'Name of the image to deploy'
+        value: ${{ jobs.build.outputs.IMAGE }}
 
 jobs:
   build:
@@ -27,4 +31,4 @@ jobs:
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE: ${{ env.SERVICE_NAME }}:${{ github.run_id }}
+          IMAGE: ${{ inputs.service_name }}:${{ github.run_id }}
