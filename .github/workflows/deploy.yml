@@ -1,0 +1,63 @@
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        type: string
+        description: 'Name of the service'
+        required: false
+      env:
+        type: string
+        description: 'Environment to deploy'
+        required: false
+      use-docker:
+        type: boolean
+        description: 'deploy using docker swarm'
+        required: false
+        default: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.env }}
+    steps:
+#      - uses: aws-actions/configure-aws-credentials@v4
+#        with:
+#          role-to-assume: ${{ secrets.AWS_ROLE }}
+#          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+#          aws-region: ${{ secrets.AWS_REGION }}
+#      - name: Login to Amazon ECR
+#        id: login-ecr
+#        uses: aws-actions/amazon-ecr-login@v2
+#      - uses: actions/checkout@v4
+#      - name: Update kube config
+#        run: |
+#          if [ "${{ inputs.use-docker }}" = true ]; then
+#            exit 0
+#          else
+#            aws eks update-kubeconfig --name eks-infra --region us-east-1  --kubeconfig ./kubeconfig
+#            echo 'KUBE_CONFIG_DATA<<EOF' >> $GITHUB_ENV
+#            echo $(cat ./kubeconfig | base64) >> $GITHUB_ENV
+#            echo 'EOF' >> $GITHUB_ENV
+#          fi
+#      - run: |
+#          if [ "${{ inputs.use-docker }}" = true ]; then
+#            if [ "${{ inputs.env }}" = 'staging' ]; then
+#              docker stack deploy ${{ inputs.service_name }} -c docker-stack.yml --with-registry-auth --prune
+#            else
+#              docker stack deploy ${{ inputs.service_name }} -c docker-stack.yml -c docker-stack-production-yml --with-registry-auth --prune
+#            fi
+#          else
+#            echo "Deploying using kubernetes"
+#          fi
+#        env:
+#          IMAGE: ${{ steps.login-ecr.outputs.registry }}/${{ needs.build.outputs.IMAGE }}
+#          ENVIRONMENT: ${{ inputs.env }}
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: Test
+        run: python -m test
+        env:
+          SERVICE_NAME: ${{ inputs.service_name }}
+          ENVIRONMENT: ${{ inputs.env }}
+          USE_DOCKER: ${{ inputs.use-docker }}
+          SECRETS: ${{ toJson(secrets) }}

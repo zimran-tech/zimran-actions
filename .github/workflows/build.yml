@@ -1,0 +1,30 @@
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        description: 'Name of the service'
+        type: string
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      IMAGE: ${{ steps.build-image.outputs.IMAGE }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ secrets.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+      - uses: actions/checkout@v4
+      - run: |
+          docker build . -t $ECR_REGISTRY/$IMAGE -f docker/Dockerfile
+          docker push $ECR_REGISTRY/$IMAGE
+          echo "IMAGE=$IMAGE" >> $GITHUB_OUTPUT
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE: ${{ env.SERVICE_NAME }}:${{ github.run_id }}
