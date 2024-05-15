@@ -4,60 +4,42 @@ on:
       service_name:
         type: string
         description: 'Name of the service'
-        required: false
-      env:
+        required: true
+      environment:
         type: string
         description: 'Environment to deploy'
-        required: false
-      use-docker:
-        type: boolean
-        description: 'deploy using docker swarm'
-        required: false
-        default: false
+        required: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.env }}
+    environment: ${{ inputs.environment }}
     steps:
-#      - uses: aws-actions/configure-aws-credentials@v4
-#        with:
-#          role-to-assume: ${{ secrets.AWS_ROLE }}
-#          role-session-name: GitHub_to_AWS_via_FederatedOIDC
-#          aws-region: ${{ secrets.AWS_REGION }}
-#      - name: Login to Amazon ECR
-#        id: login-ecr
-#        uses: aws-actions/amazon-ecr-login@v2
-#      - uses: actions/checkout@v4
-#      - name: Update kube config
-#        run: |
-#          if [ "${{ inputs.use-docker }}" = true ]; then
-#            exit 0
-#          else
-#            aws eks update-kubeconfig --name eks-infra --region us-east-1  --kubeconfig ./kubeconfig
-#            echo 'KUBE_CONFIG_DATA<<EOF' >> $GITHUB_ENV
-#            echo $(cat ./kubeconfig | base64) >> $GITHUB_ENV
-#            echo 'EOF' >> $GITHUB_ENV
-#          fi
-#      - run: |
-#          if [ "${{ inputs.use-docker }}" = true ]; then
-#            if [ "${{ inputs.env }}" = 'staging' ]; then
-#              docker stack deploy ${{ inputs.service_name }} -c docker-stack.yml --with-registry-auth --prune
-#            else
-#              docker stack deploy ${{ inputs.service_name }} -c docker-stack.yml -c docker-stack-production-yml --with-registry-auth --prune
-#            fi
-#          else
-#            echo "Deploying using kubernetes"
-#          fi
-#        env:
-#          IMAGE: ${{ steps.login-ecr.outputs.registry }}/${{ needs.build.outputs.IMAGE }}
-#          ENVIRONMENT: ${{ inputs.env }}
-      - name: checkout
-        uses: actions/checkout@v4
-      - name: Test
-        run: python -m test
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - uses: actions/checkout@v4
+      - name: Update kube config
+        run: |
+            aws eks update-kubeconfig --name eks-infra --region us-east-1  --kubeconfig ./kubeconfig
+            echo 'KUBE_CONFIG_DATA<<EOF' >> $GITHUB_ENV
+            echo $(cat ./kubeconfig | base64) >> $GITHUB_ENV
+            echo 'EOF' >> $GITHUB_ENV
+      - name: helm deploy
+        uses: koslib/helm-eks-action@master
         env:
-          SERVICE_NAME: ${{ inputs.service_name }}
-          ENVIRONMENT: ${{ inputs.env }}
-          USE_DOCKER: ${{ inputs.use-docker }}
-          SECRETS: ${{ toJson(secrets) }}
+          KUBE_CONFIG_DATA: ${{ env.KUBE_CONFIG_DATA }}
+        with:
+          command: |
+            helm repo add prosperi-charts https://zimran-tech.github.io/helm-charts
+            helm repo update
+
+            helm upgrade --install ${{ inputs.service_name }} prosperi-charts/app \
+               --version 2.0.0 -f helm-values-staging.yaml \
+               --set image=${{ steps.login-ecr.outputs.registry }}/${{ needs.build.outputs.IMAGE }} \
+               -n prosperi-services-${{ inputs.environment }} --debug
