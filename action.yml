@@ -1,0 +1,59 @@
+name: 'Deploy'
+description: 'Deploy service to EKS cluster'
+inputs:
+  service_name:
+    description: 'Name of the service'
+    required: true
+  environment:
+    description: 'Environment to deploy'
+    required: true
+  helm_version:
+    description: 'Helm chart version'
+    required: true
+  k8s_namespace:
+    description: 'Kubernetes namespace'
+    required: true
+  image_name:
+    description: 'Name of the image to deploy'
+    required: true
+  debug_enabled:
+    description: 'Enable debug mode'
+    required: false
+  aws_role:
+    description: 'AWS role to assume'
+    required: true
+  aws_region:
+    description: 'AWS region'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws_role }}
+        role-session-name: GitHub_to_AWS_via_FederatedOIDC
+        aws-region: ${{ inputs.aws_region }}
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+    - uses: actions/checkout@v4
+    - name: Update kube config
+      shell: bash
+      run: |
+        aws eks update-kubeconfig --name eks-infra --region us-east-1  --kubeconfig ./kubeconfig
+        echo 'KUBE_CONFIG_DATA<<EOF' >> $GITHUB_ENV
+        echo $(cat ./kubeconfig | base64) >> $GITHUB_ENV
+        echo 'EOF' >> $GITHUB_ENV
+    - name: helm deploy
+      uses: koslib/helm-eks-action@master
+      env:
+        KUBE_CONFIG_DATA: ${{ env.KUBE_CONFIG_DATA }}
+      with:
+        command: |
+          helm repo add prosperi-charts https://zimran-tech.github.io/helm-charts
+          helm repo update
+
+          helm upgrade --install ${{ inputs.service_name }} prosperi-charts/app \
+             --version ${{ inputs.helm_version }} -f helm-values/${{ inputs.environment }}.yaml \
+             --set image=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image_name }} \
+             -n ${{ inputs.k8s_namespace }} ${{ (contains(inputs.debug_enabled, 'true') && '--debug') || '' }}
