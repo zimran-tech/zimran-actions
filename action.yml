@@ -24,6 +24,9 @@ inputs:
     description: 'Update API docs'
     required: false
     default: 'false'
+  github_pat:
+    description: 'GitHub personal access token'
+    required: false
   aws_role:
     description: 'AWS role to assume'
     required: true
@@ -66,7 +69,7 @@ runs:
       if: ${{ inputs.update_api_docs == 'true' }}
       uses: actions/github-script@v6
       with:
-        github-token: ${{ secrets.PAT }}
+        github-token: ${{ inputs.github_pat }}
         script: |
           await github.rest.actions.createWorkflowDispatch({
              owner: context.repo.owner,
