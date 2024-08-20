@@ -33,6 +33,9 @@ inputs:
   aws_region:
     description: 'AWS region'
     required: true
+  cluster_name:
+    description: 'Name of the cluster'
+    required: true
 runs:
   using: 'composite'
   steps:
@@ -48,7 +51,7 @@ runs:
     - name: Update kube config
       shell: bash
       run: |
-        aws eks update-kubeconfig --name eks-infra --region us-east-1  --kubeconfig ./kubeconfig
+        aws eks update-kubeconfig --name ${{ inputs.cluster_name }} --region us-east-1  --kubeconfig ./kubeconfig
         echo 'KUBE_CONFIG_DATA<<EOF' >> $GITHUB_ENV
         echo $(cat ./kubeconfig | base64) >> $GITHUB_ENV
         echo 'EOF' >> $GITHUB_ENV
