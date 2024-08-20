@@ -33,9 +33,6 @@ inputs:
   aws_region:
     description: 'AWS region'
     required: true
-  product_name:
-    description: 'Name of the product'
-    required: true
   cluster_name:
     description: 'Name of the cluster'
     required: true
@@ -64,10 +61,10 @@ runs:
         KUBE_CONFIG_DATA: ${{ env.KUBE_CONFIG_DATA }}
       with:
         command: |
-          helm repo add ${{ inputs.product_name }}-charts https://zimran-tech.github.io/helm-charts
+          helm repo add prosperi-charts https://zimran-tech.github.io/helm-charts
           helm repo update
 
-          helm upgrade --install ${{ inputs.service_name }} ${{ inputs.product_name }}-charts/app \
+          helm upgrade --install ${{ inputs.service_name }} prosperi-charts/app \
              --version ${{ inputs.helm_version }} -f helm-values/${{ inputs.environment }}.yaml \
              --set image=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image_name }} \
              -n ${{ inputs.k8s_namespace }} ${{ (contains(inputs.debug_enabled, 'true') && '--debug') || '' }}
