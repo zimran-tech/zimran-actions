@@ -36,6 +36,9 @@ inputs:
   cluster_name:
     description: 'Name of the cluster'
     required: true
+  product_name:
+    description: 'Name of the product'
+    required: true
 runs:
   using: 'composite'
   steps:
@@ -65,7 +68,7 @@ runs:
           helm repo update
 
           helm upgrade --install ${{ inputs.service_name }} prosperi-charts/app \
-             --version ${{ inputs.helm_version }} -f helm-values/${{ inputs.environment }}.yaml \
+             --version ${{ inputs.helm_version }} -f helm-values/${{ inputs.product_name }}/${{ inputs.environment }}.yaml \
              --set image=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image_name }} \
              -n ${{ inputs.k8s_namespace }} ${{ (contains(inputs.debug_enabled, 'true') && '--debug') || '' }}
     - name: Update API docs
