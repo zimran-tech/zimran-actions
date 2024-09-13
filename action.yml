@@ -81,5 +81,5 @@ runs:
              owner: context.repo.owner,
              repo: 'api-docs',
              workflow_id: '${{ inputs.product_name }}.yml',
-             ref: '${{ inputs.product_name == 'prosperi' && 'develop' || 'finelo-develop' }}'
+             ref: 'develop'
           })
