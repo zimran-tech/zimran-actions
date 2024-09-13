@@ -80,6 +80,6 @@ runs:
           await github.rest.actions.createWorkflowDispatch({
              owner: context.repo.owner,
              repo: 'api-docs',
-             workflow_id: 'update-api-schema.yml',
+             workflow_id: '${{ inputs.product_name }}.yml',
              ref: 'develop'
           })
