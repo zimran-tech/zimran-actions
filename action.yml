@@ -43,7 +43,7 @@ inputs:
     default: 'false'
   github_pat:
     description: 'GitHub personal access token'
-    required: false
+    required: true
 
 runs:
   using: 'composite'
@@ -65,6 +65,7 @@ runs:
       uses: actions/checkout@v4
       with:
         repository: ${{ inputs.values_repository }}
+        token: ${{ inputs.github_pat }}
 
     - name: Update kube config
       shell: bash
