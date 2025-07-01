@@ -1,5 +1,6 @@
+# Updated Composite Action: deploy/action.yml
 name: 'Deploy'
-description: 'Deploy service to EKS cluster'
+description: 'Deploy service to EKS cluster using centralized Helm values'
 inputs:
   service_name:
     description: 'Name of the service'
@@ -16,6 +17,22 @@ inputs:
   image_name:
     description: 'Name of the image to deploy'
     required: true
+  product_name:
+    description: 'Name of the product'
+    required: true
+  values_repository:
+    description: 'The central repository for helm values (e.g., your-org/product-helm-values)'
+    required: true
+    default: 'your-org/product-helm-values'
+  aws_role:
+    description: 'AWS role to assume'
+    required: true
+  aws_region:
+    description: 'AWS region'
+    required: true
+  cluster_name:
+    description: 'Name of the cluster'
+    required: true
   debug_enabled:
     description: 'Enable debug mode'
     required: false
@@ -27,18 +44,7 @@ inputs:
   github_pat:
     description: 'GitHub personal access token'
     required: false
-  aws_role:
-    description: 'AWS role to assume'
-    required: true
-  aws_region:
-    description: 'AWS region'
-    required: true
-  cluster_name:
-    description: 'Name of the cluster'
-    required: true
-  product_name:
-    description: 'Name of the product'
-    required: true
+
 runs:
   using: 'composite'
   steps:
@@ -47,18 +53,26 @@ runs:
         role-to-assume: ${{ inputs.aws_role }}
         role-session-name: GitHub_to_AWS_via_FederatedOIDC
         aws-region: ${{ inputs.aws_region }}
+
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
-    - uses: actions/checkout@v4
+
+    - name: Checkout Service Code
+      uses: actions/checkout@v4
+
+    - name: Checkout Helm Values Repository
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.values_repository }}
+
     - name: Update kube config
       shell: bash
       run: |
-        aws eks update-kubeconfig --name ${{ inputs.cluster_name }} --region ${{ inputs.aws_region }}  --kubeconfig ./kubeconfig
-        echo 'KUBE_CONFIG_DATA<<EOF' >> $GITHUB_ENV
-        echo $(cat ./kubeconfig | base64) >> $GITHUB_ENV
-        echo 'EOF' >> $GITHUB_ENV
-    - name: helm deploy
+        aws eks update-kubeconfig --name ${{ inputs.cluster_name }} --region ${{ inputs.aws_region }} --kubeconfig ./kubeconfig
+        echo "KUBE_CONFIG_DATA=$(cat ./kubeconfig | base64)" >> $GITHUB_ENV
+
+    - name: Build Helm Command & Deploy
       uses: koslib/helm-eks-action@master
       env:
         KUBE_CONFIG_DATA: ${{ env.KUBE_CONFIG_DATA }}
@@ -67,10 +81,32 @@ runs:
           helm repo add prosperi-charts https://zimran-tech.github.io/helm-charts
           helm repo update
 
-          helm upgrade --install ${{ inputs.service_name }} prosperi-charts/app \
-             --version ${{ inputs.helm_version }} -f helm-values/${{ inputs.product_name }}/${{ inputs.environment }}.yaml \
-             --set image=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image_name }} \
-             -n ${{ inputs.k8s_namespace }} ${{ (contains(inputs.debug_enabled, 'true') && '--debug') || '' }}
+          SHARED_VALUES_PATH="./${{ inputs.environment }}/shared.yaml"
+          SERVICE_VALUES_PATH="./${{ inputs.environment }}/${{ inputs.service_name }}.yaml"
+
+          HELM_COMMAND="helm upgrade --install ${{ inputs.service_name }} prosperi-charts/app \
+            --version ${{ inputs.helm_version }} \
+            -n ${{ inputs.k8s_namespace }} \
+            --set image=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image_name }} \
+            ${{ (contains(inputs.debug_enabled, 'true') && '--debug') || '' }}"
+
+          if [ -f "$SHARED_VALUES_PATH" ]; then
+            HELM_COMMAND="$HELM_COMMAND -f $SHARED_VALUES_PATH"
+            echo "✅ Found and included shared values file: $SHARED_VALUES_PATH"
+          else
+            echo "🟡 Shared values file not found, skipping: $SHARED_VALUES_PATH"
+          fi
+
+          if [ -f "$SERVICE_VALUES_PATH" ]; then
+            HELM_COMMAND="$HELM_COMMAND -f $SERVICE_VALUES_PATH"
+            echo "✅ Found and included service-specific values file: $SERVICE_VALUES_PATH"
+          else
+            echo "🟡 Service-specific values file not found, skipping: $SERVICE_VALUES_PATH"
+          fi
+
+          echo "Executing: $HELM_COMMAND"
+          $HELM_COMMAND
+
     - name: Update API docs
       if: ${{ inputs.update_api_docs == 'true' }}
       uses: actions/github-script@v6
