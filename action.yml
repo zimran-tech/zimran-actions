@@ -71,7 +71,7 @@ runs:
       shell: bash
       run: |
         aws eks update-kubeconfig --name ${{ inputs.cluster_name }} --region ${{ inputs.aws_region }} --kubeconfig ./kubeconfig
-        echo "KUBE_CONFIG_DATA=$(cat ./kubeconfig | base64)" >> $GITHUB_ENV
+        echo "KUBE_CONFIG_DATA=$(cat ./kubeconfig | base64 -w 0)" >> $GITHUB_ENV
 
     - name: Build Helm Command & Deploy
       uses: koslib/helm-eks-action@master
