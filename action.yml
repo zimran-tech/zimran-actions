@@ -1,115 +1,105 @@
-name: 'Deploy'
-description: 'Deploy service to EKS cluster using centralized Helm values'
+name: "Deploy to EKS"
+description: "Deploys a service to an EKS cluster using a centralized Helm values repository."
+author: "Zimran"
+
+branding:
+  icon: "upload-cloud"
+  color: "blue"
+
 inputs:
   service_name:
-    description: 'Name of the service'
+    description: "The name of the service to deploy (e.g., 'users', 'payments'). This must match the service name in the values repository."
     required: true
   environment:
-    description: 'Environment to deploy'
+    description: "The deployment environment (e.g., 'staging', 'production')."
     required: true
   helm_version:
-    description: 'Helm chart version'
+    description: "The version of the Helm chart to deploy."
     required: true
   k8s_namespace:
-    description: 'Kubernetes namespace'
+    description: "The Kubernetes namespace to deploy into."
     required: true
   image_name:
-    description: 'Name of the image to deploy'
+    description: "The name of the Docker image to deploy (e.g., 'my-org/my-app:latest')."
     required: true
   product_name:
-    description: 'Name of the product'
+    description: "The name of the product for documentation purposes."
     required: true
   values_repository:
-    description: 'The central repository for helm values (e.g., your-org/product-helm-values)'
-    required: true
-    default: 'your-org/product-helm-values'
+    description: "The centralized repository for Helm values (e.g., 'your-org/product-helm-values')."
+    required: false
+    default: "your-org/product-helm-values"
   aws_role:
-    description: 'AWS role to assume'
+    description: "The AWS IAM role to assume for deployment."
     required: true
   aws_region:
-    description: 'AWS region'
+    description: "The AWS region of the EKS cluster."
     required: true
   cluster_name:
-    description: 'Name of the cluster'
+    description: "The name of the EKS cluster."
     required: true
   debug_enabled:
-    description: 'Enable debug mode'
+    description: "Enable debug output for Helm."
     required: false
-    default: 'false'
+    default: "false"
   update_api_docs:
-    description: 'Update API docs'
+    description: "Set to 'true' to trigger the API documentation update workflow."
     required: false
-    default: 'false'
+    default: "false"
   github_pat:
-    description: 'GitHub personal access token'
-    required: true
+    description: "GitHub Personal Access Token for checking out the values repository. Using GITHUB_TOKEN is recommended."
+    required: false
+    default: ${{ github.token }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
-    - uses: aws-actions/configure-aws-credentials@v4
+    - name: "Configure AWS Credentials"
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ inputs.aws_role }}
         role-session-name: GitHub_to_AWS_via_FederatedOIDC
         aws-region: ${{ inputs.aws_region }}
 
-    - name: Login to Amazon ECR
+    - name: "Login to Amazon ECR"
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Checkout Service Code
+    - name: "Checkout Service Code"
       uses: actions/checkout@v4
+      with:
+        path: "service_code"
 
-    - name: Checkout Helm Values Repository
+    - name: "Checkout Helm Values Repository"
       uses: actions/checkout@v4
       with:
         repository: ${{ inputs.values_repository }}
         token: ${{ inputs.github_pat }}
+        path: "helm_values"
 
-    - name: Update kube config
+    - name: "Update Kubeconfig"
       shell: bash
       run: |
-        aws eks update-kubeconfig --name ${{ inputs.cluster_name }} --region ${{ inputs.aws_region }}  --kubeconfig ./kubeconfig
-        echo 'KUBE_CONFIG_DATA<<EOF' >> $GITHUB_ENV
-        echo $(cat ./kubeconfig | base64) >> $GITHUB_ENV
-        echo 'EOF' >> $GITHUB_ENV
+        aws eks update-kubeconfig --name ${{ inputs.cluster_name }} --region ${{ inputs.aws_region }} --kubeconfig ./kubeconfig
+        echo "KUBE_CONFIG_DATA=$(base64 -w 0 ./kubeconfig)" >> $GITHUB_ENV
 
-    - name: Build Helm Command & Deploy
-      uses: koslib/helm-eks-action@master
+    - name: "Deploy with Helm"
+      shell: bash
+      run: |
+        chmod +x ${{ github.action_path }}/scripts/deploy.sh
+        ${{ github.action_path }}/scripts/deploy.sh
       env:
         KUBE_CONFIG_DATA: ${{ env.KUBE_CONFIG_DATA }}
-      with:
-        command: |
-          helm repo add prosperi-charts https://zimran-tech.github.io/helm-charts
-          helm repo update
+        INPUT_SERVICE_NAME: ${{ inputs.service_name }}
+        INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        INPUT_HELM_VERSION: ${{ inputs.helm_version }}
+        INPUT_K8S_NAMESPACE: ${{ inputs.k8s_namespace }}
+        INPUT_IMAGE_NAME: ${{ inputs.image_name }}
+        INPUT_ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        INPUT_DEBUG_ENABLED: ${{ inputs.debug_enabled }}
+        WORKING_DIRECTORY: "helm_values" # Set the working directory for the script
 
-          SHARED_VALUES_PATH="./${{ inputs.environment }}/shared.yaml"
-          SERVICE_VALUES_PATH="./${{ inputs.environment }}/services/${{ inputs.service_name }}.yaml"
-
-          HELM_COMMAND="helm upgrade --install ${{ inputs.service_name }} prosperi-charts/app \
-            --version ${{ inputs.helm_version }} \
-            -n ${{ inputs.k8s_namespace }} \
-            --set image=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image_name }} \
-            ${{ (contains(inputs.debug_enabled, 'true') && '--debug') || '' }}"
-
-          if [ -f "$SHARED_VALUES_PATH" ]; then
-            HELM_COMMAND="$HELM_COMMAND -f $SHARED_VALUES_PATH"
-            echo "✅ Found and included shared values file: $SHARED_VALUES_PATH"
-          else
-            echo "🟡 Shared values file not found, skipping: $SHARED_VALUES_PATH"
-          fi
-
-          if [ -f "$SERVICE_VALUES_PATH" ]; then
-            HELM_COMMAND="$HELM_COMMAND -f $SERVICE_VALUES_PATH"
-            echo "✅ Found and included service-specific values file: $SERVICE_VALUES_PATH"
-          else
-            echo "🟡 Service-specific values file not found, skipping: $SERVICE_VALUES_PATH"
-          fi
-
-          echo "Executing: $HELM_COMMAND"
-          $HELM_COMMAND
-
-    - name: Update API docs
+    - name: "Update API Documentation"
       if: ${{ inputs.update_api_docs == 'true' }}
       uses: actions/github-script@v6
       with:
