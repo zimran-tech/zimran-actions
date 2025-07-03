@@ -26,8 +26,8 @@ helm repo add "${HELM_REPO_NAME}" "${HELM_REPO_URL}"
 helm repo update
 
 # Construct Helm command
-SHARED_VALUES_PATH="./${ENVIRONMENT}/shared.yaml"
-SERVICE_VALUES_PATH="./${ENVIRONMENT}/services/${SERVICE_NAME}.yaml"
+SHARED_VALUES_PATH="${ENVIRONMENT}/shared.yaml"
+SERVICE_VALUES_PATH="${ENVIRONMENT}/services/${SERVICE_NAME}.yaml"
 
 HELM_COMMAND="helm upgrade --install ${SERVICE_NAME} ${HELM_REPO_NAME}/${HELM_CHART_NAME} \
   --version ${HELM_VERSION} \

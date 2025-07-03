@@ -85,6 +85,7 @@ runs:
 
     - name: "Deploy with Helm"
       shell: bash
+      working-directory: helm_values # Set the working directory for this step
       run: |
         chmod +x ${{ github.action_path }}/scripts/deploy.sh
         ${{ github.action_path }}/scripts/deploy.sh
@@ -97,7 +98,6 @@ runs:
         INPUT_IMAGE_NAME: ${{ inputs.image_name }}
         INPUT_ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         INPUT_DEBUG_ENABLED: ${{ inputs.debug_enabled }}
-        WORKING_DIRECTORY: "helm_values" # Set the working directory for the script
 
     - name: "Update API Documentation"
       if: ${{ inputs.update_api_docs == 'true' }}
