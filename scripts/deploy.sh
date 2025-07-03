@@ -1,24 +1,42 @@
 #!/bin/bash
 set -eo pipefail
 
-# Required inputs
-SERVICE_NAME="${INPUT_SERVICE_NAME}"
-ENVIRONMENT="${INPUT_ENVIRONMENT}"
-HELM_VERSION="${INPUT_HELM_VERSION}"
-K8S_NAMESPACE="${INPUT_K8S_NAMESPACE}"
-IMAGE_NAME="${INPUT_IMAGE_NAME}"
-ECR_REGISTRY="${INPUT_ECR_REGISTRY}"
-DEBUG_ENABLED="${INPUT_DEBUG_ENABLED}"
-
-# Helm Chart Information
-HELM_REPO_URL="https://zimran-tech.github.io/helm-charts"
-HELM_CHART_NAME="app"
-HELM_REPO_NAME="prosperi-charts"
-
 # Function to log messages
 log() {
   echo "--- $1"
 }
+
+# --- Kubeconfig Setup ---
+# The KUBE_CONFIG_DATA environment variable is passed in from the action.
+# We decode it and export KUBECONFIG to make it available to Helm.
+if [ -z "${KUBE_CONFIG_DATA}" ]; then
+  log "🔴 ERROR: KUBE_CONFIG_DATA environment variable is not set."
+  exit 1
+fi
+
+KUBECONFIG_FILE="/tmp/kubeconfig_$(date +%s)"
+echo "${KUBE_CONFIG_DATA}" | base64 -d > "${KUBECONFIG_FILE}"
+export KUBECONFIG="${KUBECONFIG_FILE}"
+log "✅ Kubeconfig configured successfully for Helm."
+
+# Cleanup trap to remove the temporary kubeconfig file on exit
+trap 'rm -f ${KUBECONFIG_FILE}' EXIT
+
+# --- Input Validation ---
+# Required inputs from the action's workflow
+SERVICE_NAME="${INPUT_SERVICE_NAME:?Service name is required}"
+ENVIRONMENT="${INPUT_ENVIRONMENT:?Environment is required}"
+HELM_VERSION="${INPUT_HELM_VERSION:?Helm version is required}"
+K8S_NAMESPACE="${INPUT_K8S_NAMESPACE:?Kubernetes namespace is required}"
+IMAGE_NAME="${INPUT_IMAGE_NAME:?Image name is required}"
+ECR_REGISTRY="${INPUT_ECR_REGISTRY:?ECR registry is required}"
+DEBUG_ENABLED="${INPUT_DEBUG_ENABLED}"
+
+# --- Helm Deployment ---
+# Helm Chart Information
+HELM_REPO_URL="https://zimran-tech.github.io/helm-charts"
+HELM_CHART_NAME="app"
+HELM_REPO_NAME="prosperi-charts"
 
 # Add Helm repository
 log "Adding Helm repository: ${HELM_REPO_URL}"
