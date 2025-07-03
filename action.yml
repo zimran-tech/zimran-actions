@@ -1,4 +1,3 @@
-# Updated Composite Action: deploy/action.yml
 name: 'Deploy'
 description: 'Deploy service to EKS cluster using centralized Helm values'
 inputs:
@@ -85,7 +84,7 @@ runs:
           helm repo update
 
           SHARED_VALUES_PATH="./${{ inputs.environment }}/shared.yaml"
-          SERVICE_VALUES_PATH="./${{ inputs.environment }}/${{ inputs.service_name }}.yaml"
+          SERVICE_VALUES_PATH="./${{ inputs.environment }}/services/${{ inputs.service_name }}.yaml"
 
           HELM_COMMAND="helm upgrade --install ${{ inputs.service_name }} prosperi-charts/app \
             --version ${{ inputs.helm_version }} \
