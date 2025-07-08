@@ -39,7 +39,7 @@ HELM_REPO_NAME="prosperi-charts"
 HELM_CHART_NAME="app"
 RELEASE_NAME="${SERVICE_NAME}"
 
-log "🚀 Deploying ${SERVICE_NAME}
+log "🚀 Deploying ${SERVICE_NAME}"
 
 # Add Helm repository
 log "Adding Helm repository: ${HELM_REPO_URL}"
