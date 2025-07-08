@@ -35,8 +35,11 @@ DEBUG_ENABLED="${INPUT_DEBUG_ENABLED}"
 # --- Helm Deployment ---
 # Helm Chart Information
 HELM_REPO_URL="https://zimran-tech.github.io/helm-charts"
-HELM_CHART_NAME="app"
 HELM_REPO_NAME="prosperi-charts"
+HELM_CHART_NAME="app"
+RELEASE_NAME="${SERVICE_NAME}"
+
+log "🚀 Deploying ${SERVICE_NAME}
 
 # Add Helm repository
 log "Adding Helm repository: ${HELM_REPO_URL}"
@@ -47,12 +50,13 @@ helm repo update
 SHARED_VALUES_PATH="${ENVIRONMENT}/shared.yaml"
 SERVICE_VALUES_PATH="${ENVIRONMENT}/services/${SERVICE_NAME}.yaml"
 
-HELM_COMMAND="helm upgrade --install ${SERVICE_NAME} ${HELM_REPO_NAME}/${HELM_CHART_NAME} \
+# Base Helm command
+HELM_COMMAND="helm upgrade --install ${RELEASE_NAME} ${HELM_REPO_NAME}/${HELM_CHART_NAME} \
   --version ${HELM_VERSION} \
   -n ${K8S_NAMESPACE} \
   --set image=${ECR_REGISTRY}/${IMAGE_NAME} \
-  --atomic \
-  --timeout 15m"
+  --timeout 15m \
+  --atomic"
 
 if [[ "${DEBUG_ENABLED}" == "true" ]]; then
   HELM_COMMAND="${HELM_COMMAND} --debug"
