@@ -55,7 +55,7 @@ runs:
   using: "composite"
   steps:
     - name: "Configure AWS Credentials"
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@v5
       with:
         role-to-assume: ${{ inputs.aws_role }}
         role-session-name: GitHub_to_AWS_via_FederatedOIDC
