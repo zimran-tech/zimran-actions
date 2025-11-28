@@ -1,0 +1,142 @@
+name: 'Update GitOps Repository'
+description: 'Updates GitOps repository with new image tags for deployments'
+inputs:
+  image:
+    description: 'Full image name with tag (e.g., registry/image:tag)'
+    required: true
+  service_name:
+    description: 'Name of the service to update'
+    required: true
+  environment:
+    description: 'Environment to update (staging or prod)'
+    required: true
+  create_pr:
+    description: 'Whether to create a PR (true) or commit directly (false)'
+    required: false
+    default: 'false'
+  github_sha:
+    description: 'GitHub commit SHA (use github.sha)'
+    required: true
+  github_actor:
+    description: 'GitHub actor who triggered the workflow (use github.actor)'
+    required: true
+  github_server_url:
+    description: 'GitHub server URL (use github.server_url)'
+    required: true
+  github_repository:
+    description: 'GitHub repository (use github.repository)'
+    required: true
+  github_run_id:
+    description: 'GitHub run ID (use github.run_id)'
+    required: true
+  gitops_repo:
+    description: 'GitOps repository name (e.g., org/repo)'
+    required: true
+  gitops_app_id:
+    description: 'GitHub App ID for GitOps repository access'
+    required: true
+  gitops_app_private_key:
+    description: 'GitHub App private key for GitOps repository access'
+    required: true
+  gitops_branch:
+    description: 'GitOps repository branch to update'
+    required: false
+    default: 'main'
+outputs:
+  environment:
+    description: 'Environment that was updated'
+    value: ${{ inputs.environment }}
+  image_tag:
+    description: 'Extracted image tag'
+    value: ${{ steps.image-tag.outputs.TAG }}
+  pr_url:
+    description: 'Pull request URL (if created)'
+    value: ${{ steps.create-pr.outputs.pull-request-url }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate GitHub App Token
+      id: generate-token
+      uses: actions/create-github-app-token@v1
+      with:
+        app-id: ${{ inputs.gitops_app_id }}
+        private-key: ${{ inputs.gitops_app_private_key }}
+        owner: ${{ github.repository_owner }}
+
+    - name: Extract image tag
+      id: image-tag
+      shell: bash
+      run: |
+        IMAGE="${{ inputs.image }}"
+        TAG="${IMAGE#*:}"
+        echo "TAG=$TAG" >> $GITHUB_OUTPUT
+
+    - name: Checkout GitOps repository
+      uses: actions/checkout@v5
+      with:
+        repository: ${{ inputs.gitops_repo }}
+        token: ${{ steps.generate-token.outputs.token }}
+        ref: ${{ inputs.gitops_branch }}
+
+    - name: Install yq
+      shell: bash
+      run: |
+        sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+        sudo chmod +x /usr/local/bin/yq
+
+    - name: Update image tag
+      shell: bash
+      run: |
+        SERVICE_NAME="${{ inputs.service_name }}"
+        ENV="${{ inputs.environment }}"
+        IMAGE_TAG="${{ steps.image-tag.outputs.TAG }}"
+        VALUES_FILE="${ENV}/services/${SERVICE_NAME}.yaml"
+
+        echo "Updating $VALUES_FILE with tag: $IMAGE_TAG"
+        yq eval ".image.tag = \"$IMAGE_TAG\"" -i "$VALUES_FILE"
+
+        # Verify the change
+        echo "Updated values:"
+        yq eval '.image' "$VALUES_FILE"
+
+    - name: Commit changes (Direct)
+      if: inputs.create_pr == 'false'
+      shell: bash
+      run: |
+        git config user.name "GitHub Actions Bot"
+        git config user.email "actions@github.com"
+        git add .
+        git commit -m "Update ${{ inputs.service_name }} ${{ inputs.environment }} image to ${{ steps.image-tag.outputs.TAG }}"
+        git push origin ${{ inputs.gitops_branch }}
+
+    - name: Create Pull Request
+      id: create-pr
+      if: inputs.create_pr == 'true'
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ steps.generate-token.outputs.token }}
+        commit-message: "Update ${{ inputs.service_name }} ${{ inputs.environment }} image to ${{ steps.image-tag.outputs.TAG }}"
+        branch: update-${{ inputs.service_name }}-${{ steps.image-tag.outputs.TAG }}
+        title: "🚀 Deploy ${{ inputs.service_name }} ${{ steps.image-tag.outputs.TAG }} to ${{ inputs.environment }}"
+        body: |
+          ## Deployment Update
+
+          **Service:** ${{ inputs.service_name }}
+          **Environment:** ${{ inputs.environment }}
+          **Image Tag:** ${{ steps.image-tag.outputs.TAG }}
+          **Commit:** ${{ inputs.github_sha }}
+
+          ### Changes
+          - Updates container image to latest build
+
+          ### Checklist
+          - [ ] Review changes
+          - [ ] Verify image exists in registry
+          - [ ] Check for any configuration changes needed
+
+          **Triggered by:** ${{ inputs.github_actor }}
+          **Workflow:** ${{ inputs.github_server_url }}/${{ inputs.github_repository }}/actions/runs/${{ inputs.github_run_id }}
+        labels: |
+          deployment
+          ${{ inputs.environment }}
+          automated

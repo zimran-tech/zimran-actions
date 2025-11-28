@@ -54,8 +54,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: "Configure AWS Credentials"
-      uses: aws-actions/configure-aws-credentials@v4
+    - uses: aws-actions/configure-aws-credentials@v5
       with:
         role-to-assume: ${{ inputs.aws_role }}
         role-session-name: GitHub_to_AWS_via_FederatedOIDC
@@ -66,12 +65,12 @@ runs:
       uses: aws-actions/amazon-ecr-login@v2
 
     - name: "Checkout Service Code"
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         path: "service_code"
 
     - name: "Checkout Helm Values Repository"
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         repository: ${{ inputs.values_repository }}
         token: ${{ inputs.github_pat }}
@@ -101,7 +100,7 @@ runs:
 
     - name: "Update API Documentation"
       if: ${{ inputs.update_api_docs == 'true' }}
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         github-token: ${{ inputs.github_pat }}
         script: |
