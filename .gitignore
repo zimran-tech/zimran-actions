@@ -1,1 +1,9 @@
+# Ignore local files
+.DS_Store
+kubeconfig
+
+# Ignore downloaded dependencies
+/node_modules
+/vendor
+
 .idea/

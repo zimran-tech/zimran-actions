@@ -1,74 +1,87 @@
-name: 'Deploy'
-description: 'Deploy service to EKS cluster'
+name: "Deploy to EKS"
+description: "Deploys a service to an EKS cluster using a centralized Helm values repository."
+author: "Zimran"
+
+branding:
+  icon: "upload-cloud"
+  color: "blue"
+
 inputs:
   service_name:
-    description: 'Name of the service'
+    description: "The name of the service to deploy (e.g., 'users', 'payments'). This must match the service name in the values repository."
     required: true
   environment:
-    description: 'Environment to deploy'
+    description: "The deployment environment (e.g., 'staging', 'production')."
     required: true
   helm_version:
-    description: 'Helm chart version'
+    description: "The version of the Helm chart to deploy."
     required: true
   k8s_namespace:
-    description: 'Kubernetes namespace'
+    description: "The Kubernetes namespace to deploy into."
     required: true
   image_name:
-    description: 'Name of the image to deploy'
+    description: "The name of the Docker image to deploy (e.g., 'my-org/my-app:latest')."
     required: true
-  debug_enabled:
-    description: 'Enable debug mode'
+  product_name:
+    description: "The name of the product for documentation purposes."
+    required: true
+  values_repository:
+    description: "The centralized repository for Helm values (e.g., 'your-org/product-helm-values')."
     required: false
-    default: 'false'
-  update_api_docs:
-    description: 'Update API docs'
-    required: false
-    default: 'false'
-  github_pat:
-    description: 'GitHub personal access token'
-    required: false
+    default: "your-org/product-helm-values"
   aws_role:
-    description: 'AWS role to assume'
+    description: "The AWS IAM role to assume for deployment."
     required: true
   aws_region:
-    description: 'AWS region'
+    description: "The AWS region of the EKS cluster."
     required: true
   cluster_name:
-    description: 'Name of the cluster'
+    description: "The name of the EKS cluster."
     required: true
+  debug_enabled:
+    description: "Enable debug output for Helm."
+    required: false
+    default: "false"
+  update_api_docs:
+    description: "Set to 'true' to trigger the API documentation update workflow."
+    required: false
+    default: "false"
+  github_pat:
+    description: "GitHub Personal Access Token for checking out the values repository. Using GITHUB_TOKEN is recommended."
+    required: false
+    default: ${{ github.token }}
+
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
-    - uses: aws-actions/configure-aws-credentials@v5
+    - name: "Configure AWS Credentials"
+      uses: aws-actions/configure-aws-credentials@v5
       with:
         role-to-assume: ${{ inputs.aws_role }}
         role-session-name: GitHub_to_AWS_via_FederatedOIDC
         aws-region: ${{ inputs.aws_region }}
-    - name: Login to Amazon ECR
+
+    - name: "Login to Amazon ECR"
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
     - uses: actions/checkout@v5
     - name: Update kube config
       shell: bash
+      working-directory: helm_values # Set the working directory for this step
       run: |
-        aws eks update-kubeconfig --name ${{ inputs.cluster_name }} --region ${{ inputs.aws_region }}  --kubeconfig ./kubeconfig
-        echo 'KUBE_CONFIG_DATA<<EOF' >> $GITHUB_ENV
-        echo $(cat ./kubeconfig | base64) >> $GITHUB_ENV
-        echo 'EOF' >> $GITHUB_ENV
-    - name: helm deploy
-      uses: koslib/helm-eks-action@master
+        chmod +x ${{ github.action_path }}/scripts/deploy.sh
+        ${{ github.action_path }}/scripts/deploy.sh
       env:
         KUBE_CONFIG_DATA: ${{ env.KUBE_CONFIG_DATA }}
-      with:
-        command: |
-          helm repo add prosperi-charts https://zimran-tech.github.io/helm-charts
-          helm repo update
+        INPUT_SERVICE_NAME: ${{ inputs.service_name }}
+        INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        INPUT_HELM_VERSION: ${{ inputs.helm_version }}
+        INPUT_K8S_NAMESPACE: ${{ inputs.k8s_namespace }}
+        INPUT_IMAGE_NAME: ${{ inputs.image_name }}
+        INPUT_ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        INPUT_DEBUG_ENABLED: ${{ inputs.debug_enabled }}
 
-          helm upgrade --install ${{ inputs.service_name }} prosperi-charts/app \
-             --version ${{ inputs.helm_version }} -f helm-values/${{ inputs.environment }}.yaml \
-             --set image=${{ steps.login-ecr.outputs.registry }}/${{ inputs.image_name }} \
-             -n ${{ inputs.k8s_namespace }} ${{ (contains(inputs.debug_enabled, 'true') && '--debug') || '' }}
-    - name: Update API docs
+    - name: "Update API Documentation"
       if: ${{ inputs.update_api_docs == 'true' }}
       uses: actions/github-script@v8
       with:
@@ -77,6 +90,6 @@ runs:
           await github.rest.actions.createWorkflowDispatch({
              owner: context.repo.owner,
              repo: 'api-docs',
-             workflow_id: 'update-api-schema.yml',
+             workflow_id: '${{ inputs.product_name }}.yml',
              ref: 'develop'
           })
