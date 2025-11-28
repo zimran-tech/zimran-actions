@@ -32,8 +32,11 @@ inputs:
   gitops_repo:
     description: 'GitOps repository name (e.g., org/repo)'
     required: true
-  gitops_repo_token:
-    description: 'Token for accessing GitOps repository'
+  gitops_app_id:
+    description: 'GitHub App ID for GitOps repository access'
+    required: true
+  gitops_app_private_key:
+    description: 'GitHub App private key for GitOps repository access'
     required: true
   gitops_branch:
     description: 'GitOps repository branch to update'
@@ -52,6 +55,14 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Generate GitHub App Token
+      id: generate-token
+      uses: actions/create-github-app-token@v1
+      with:
+        app-id: ${{ inputs.gitops_app_id }}
+        private-key: ${{ inputs.gitops_app_private_key }}
+        owner: ${{ github.repository_owner }}
+
     - name: Extract image tag
       id: image-tag
       shell: bash
@@ -61,10 +72,10 @@ runs:
         echo "TAG=$TAG" >> $GITHUB_OUTPUT
 
     - name: Checkout GitOps repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         repository: ${{ inputs.gitops_repo }}
-        token: ${{ inputs.gitops_repo_token }}
+        token: ${{ steps.generate-token.outputs.token }}
         ref: ${{ inputs.gitops_branch }}
 
     - name: Install yq
@@ -103,7 +114,7 @@ runs:
       if: inputs.create_pr == 'true'
       uses: peter-evans/create-pull-request@v6
       with:
-        token: ${{ inputs.gitops_repo_token }}
+        token: ${{ steps.generate-token.outputs.token }}
         commit-message: "Update ${{ inputs.service_name }} ${{ inputs.environment }} image to ${{ steps.image-tag.outputs.TAG }}"
         branch: update-${{ inputs.service_name }}-${{ steps.image-tag.outputs.TAG }}
         title: "🚀 Deploy ${{ inputs.service_name }} ${{ steps.image-tag.outputs.TAG }} to ${{ inputs.environment }}"
