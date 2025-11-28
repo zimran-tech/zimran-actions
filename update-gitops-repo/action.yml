@@ -8,7 +8,7 @@ inputs:
     description: 'Name of the service to update'
     required: true
   environment:
-    description: 'Environment to update (staging or production)'
+    description: 'Environment to update (staging or prod)'
     required: true
   create_pr:
     description: 'Whether to create a PR (true) or commit directly (false)'
