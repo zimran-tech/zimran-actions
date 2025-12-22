@@ -72,7 +72,7 @@ runs:
         echo "TAG=$TAG" >> $GITHUB_OUTPUT
 
     - name: Checkout GitOps repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         repository: ${{ inputs.gitops_repo }}
         token: ${{ steps.generate-token.outputs.token }}
