@@ -72,7 +72,7 @@ runs:
         echo "TAG=$TAG" >> $GITHUB_OUTPUT
 
     - name: Checkout GitOps repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         repository: ${{ inputs.gitops_repo }}
         token: ${{ steps.generate-token.outputs.token }}
@@ -106,12 +106,52 @@ runs:
         git config user.name "GitHub Actions Bot"
         git config user.email "actions@github.com"
         git add .
+
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          echo "No changes to commit - image tag is already up-to-date"
+          exit 0
+        fi
+
         git commit -m "Update ${{ inputs.service_name }} ${{ inputs.environment }} image to ${{ steps.image-tag.outputs.TAG }}"
-        git push origin ${{ inputs.gitops_branch }}
+
+        # Retry push with pull-rebase on failure (handles parallel job conflicts)
+        MAX_RETRIES=5
+        RETRY_COUNT=0
+
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+          if git push origin ${{ inputs.gitops_branch }}; then
+            echo "Successfully pushed changes"
+            break
+          else
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+              echo "Push failed, attempt $RETRY_COUNT of $MAX_RETRIES. Pulling and retrying..."
+              git pull --rebase origin ${{ inputs.gitops_branch }}
+              sleep $((RETRY_COUNT * 2))  # Exponential backoff
+            else
+              echo "Failed to push after $MAX_RETRIES attempts"
+              exit 1
+            fi
+          fi
+        done
+
+    - name: Check for changes before PR
+      id: check-changes
+      if: inputs.create_pr == 'true'
+      shell: bash
+      run: |
+        git add .
+        if git diff --staged --quiet; then
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+          echo "No changes to commit - image tag is already up-to-date"
+        else
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+        fi
 
     - name: Create Pull Request
       id: create-pr
-      if: inputs.create_pr == 'true'
+      if: inputs.create_pr == 'true' && steps.check-changes.outputs.has_changes == 'true'
       uses: peter-evans/create-pull-request@v6
       with:
         token: ${{ steps.generate-token.outputs.token }}
