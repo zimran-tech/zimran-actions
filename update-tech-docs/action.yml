@@ -1,0 +1,71 @@
+name: 'Update Tech Docs'
+description: 'Updates tech-docs repository with documentation from service repository'
+inputs:
+  service_name:
+    description: 'Name of the service'
+    required: true
+  tech_docs_repo:
+    description: 'Tech docs repository name (e.g., org/repo)'
+    required: true
+  tech_docs_app_id:
+    description: 'GitHub App ID for tech-docs repository access'
+    required: true
+  tech_docs_app_private_key:
+    description: 'GitHub App private key for tech-docs repository access'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout service repository
+      uses: actions/checkout@v4
+
+    - name: Generate GitHub App Token
+      id: generate-token
+      uses: actions/create-github-app-token@v1
+      with:
+        app-id: ${{ inputs.tech_docs_app_id }}
+        private-key: ${{ inputs.tech_docs_app_private_key }}
+        owner: ${{ github.repository_owner }}
+
+    - name: Checkout tech-docs repository
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.tech_docs_repo }}
+        token: ${{ steps.generate-token.outputs.token }}
+        path: tech-docs
+
+    - name: Copy documentation files
+      shell: bash
+      run: |
+        mkdir -p tech-docs/docs/services/${{ inputs.service_name }}
+
+        # Copy README.md if exists
+        if [ -f README.md ]; then
+          cp README.md tech-docs/docs/services/${{ inputs.service_name }}/
+          echo "Copied README.md"
+        fi
+
+        # Copy docs/*.md files if they exist
+        if [ -d docs ] && [ -n "$(ls -A docs/*.md 2>/dev/null)" ]; then
+          cp docs/*.md tech-docs/docs/services/${{ inputs.service_name }}/
+          echo "Copied docs/*.md files"
+        fi
+
+    - name: Commit and push changes
+      shell: bash
+      working-directory: tech-docs
+      run: |
+        git config user.name "GitHub Actions Bot"
+        git config user.email "actions@github.com"
+        git add docs/services/${{ inputs.service_name }}
+
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+          exit 0
+        fi
+
+        git commit -m "Update ${{ inputs.service_name }} documentation
+
+        Triggered by: ${{ github.actor }}
+        Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        git push origin main
