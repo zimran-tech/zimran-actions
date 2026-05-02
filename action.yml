@@ -100,7 +100,7 @@ runs:
 
     - name: "Update API Documentation"
       if: ${{ inputs.update_api_docs == 'true' }}
-      uses: actions/github-script@v8
+      uses: actions/github-script@v9
       with:
         github-token: ${{ inputs.github_pat }}
         script: |
