@@ -1,6 +1,19 @@
 # Ignore local files
 .DS_Store
 kubeconfig
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+credentials.*.json
+!credentials.example.json
+!credentials.*.example.json
+secrets.local.*
 
 # Ignore downloaded dependencies
 /node_modules
